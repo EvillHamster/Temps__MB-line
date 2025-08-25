@@ -1,4 +1,4 @@
-import { set, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { ref, set, push, onValue, update } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
 export function startApp(database, dbRef) {
 
@@ -72,27 +72,29 @@ export function startApp(database, dbRef) {
     }
 
     // ======= Таблица =======
-    function addRow(rowData = null, initialLoad = false) {
+    function addRow(rowData = null, key = null) {
         const tbody = document.querySelector("#compoundTable tbody");
         const newRow = document.createElement("tr");
+        newRow.dataset.key = key || '';
         newRow.innerHTML = `
-            <td class="date-cell">${rowData ? rowData[0] : getToday()}</td>
-            <td contenteditable="true">${rowData ? rowData[1] : ""}</td>
-            <td><input type="text" class="compound-input" list="compoundList" value="${rowData ? rowData[2] : ""}"></td>
-            <td class="min-value">${rowData ? rowData[3] : ""}</td>
-            <td class="max-value">${rowData ? rowData[4] : ""}</td>
-            <td contenteditable="true">${rowData ? rowData[5] : ""}</td>
-            <td contenteditable="true">${rowData ? rowData[6] : ""}</td>
-            <td contenteditable="true">${rowData ? rowData[7] : ""}</td>
+            <td class="date-cell">${rowData ? rowData.date : getToday()}</td>
+            <td contenteditable="true">${rowData ? rowData.sap : ""}</td>
+            <td><input type="text" class="compound-input" list="compoundList" value="${rowData ? rowData.compound : ""}"></td>
+            <td class="min-value">${rowData ? rowData.min : ""}</td>
+            <td class="max-value">${rowData ? rowData.max : ""}</td>
+            <td contenteditable="true">${rowData ? rowData.tdd : ""}</td>
+            <td contenteditable="true">${rowData ? rowData.tdp : ""}</td>
+            <td contenteditable="true">${rowData ? rowData.comment : ""}</td>
             <td><button class="deleteBtn">✖</button></td>`;
         tbody.appendChild(newRow);
-        bindRow(newRow, initialLoad);
+        bindRow(newRow);
         updatePermissions();
         restoreOutOfRange(newRow);
-        if (!initialLoad) saveTable(); // сохраняем только если не инициализация
+
+        if (!key) saveRow(newRow);
     }
 
-    function bindRow(row, initialLoad = false) {
+    function bindRow(row) {
         const input = row.querySelector(".compound-input");
         const minCell = row.querySelector(".min-value");
         const maxCell = row.querySelector(".max-value");
@@ -101,7 +103,12 @@ export function startApp(database, dbRef) {
         const commentCell = row.children[7];
         const deleteBtn = row.querySelector(".deleteBtn");
 
-        input.addEventListener("input", () => {
+        function save() {
+            saveRow(row);
+        }
+
+        // input с datalist
+        input.addEventListener("change", () => {
             const compound = compounds.find(c => c.name === input.value);
             if (compound) {
                 minCell.textContent = compound.min;
@@ -110,29 +117,62 @@ export function startApp(database, dbRef) {
                 minCell.textContent = "";
                 maxCell.textContent = "";
             }
-            checkRange(tddCell, compound?.min, compound?.max);
-            checkRange(tdpCell, compound?.min, compound?.max);
-            if (!initialLoad) saveTable();
+            restoreOutOfRange(row);
+            save();
         });
 
+        // contenteditable ячейки
         [tddCell, tdpCell, commentCell].forEach(cell => {
-            cell.addEventListener("input", () => {
-                const min = parseFloat(minCell.textContent);
-                const max = parseFloat(maxCell.textContent);
-                if (!isNaN(min) && !isNaN(max)) {
-                    checkRange(cell, min, max);
+            cell.addEventListener("blur", save);
+            cell.addEventListener("keydown", e => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    cell.blur();
                 }
-                if (!initialLoad) saveTable();
             });
         });
 
         deleteBtn.addEventListener("click", () => {
             if (currentUserRole === 'admin') {
-                row.remove();
-                saveTable();
+                deleteRow(row);
             }
         });
     }
+
+    function saveRow(row) {
+        const key = row.dataset.key || push(dbRef).key;
+        row.dataset.key = key;
+        const data = {
+            date: row.children[0].textContent,
+            sap: row.children[1].textContent,
+            compound: row.querySelector(".compound-input").value,
+            min: row.children[3].textContent,
+            max: row.children[4].textContent,
+            tdd: row.children[5].textContent,
+            tdp: row.children[6].textContent,
+            comment: row.children[7].textContent
+        };
+        update(ref(database, 'compounds/' + key), data);
+    }
+
+    function deleteRow(row) {
+        const key = row.dataset.key;
+        if (key) {
+            set(ref(database, 'compounds/' + key), null);
+        }
+        row.remove();
+    }
+
+    // ======= Загрузка данных =======
+    onValue(dbRef, snapshot => {
+        const data = snapshot.val() || {};
+        const tbody = document.querySelector("#compoundTable tbody");
+        tbody.innerHTML = '';
+        Object.keys(data).forEach(key => {
+            addRow(data[key], key);
+        });
+        if (Object.keys(data).length === 0) addRow();
+    });
 
     // ======= Сортировка =======
     let sortAsc = true;
@@ -159,7 +199,6 @@ export function startApp(database, dbRef) {
             currentUserRole = user.role;
             updatePermissions();
             localStorage.setItem("currentUser", JSON.stringify(user));
-            loadTable();
         } else {
             loginError.style.display = 'block';
         }
@@ -184,36 +223,6 @@ export function startApp(database, dbRef) {
         localStorage.removeItem("currentUser");
     });
 
-    // ======= Firebase =======
-    function saveTable() {
-        const rows = [];
-        document.querySelectorAll("#compoundTable tbody tr").forEach(row => {
-            const cells = row.querySelectorAll("td");
-            rows.push([
-                cells[0].textContent,
-                cells[1].textContent,
-                row.querySelector(".compound-input").value,
-                cells[3].textContent,
-                cells[4].textContent,
-                cells[5].textContent,
-                cells[6].textContent,
-                cells[7].textContent
-            ]);
-        });
-        set(dbRef, rows);
-    }
-
-    function loadTable() {
-        onValue(dbRef, snapshot => {
-            const data = snapshot.val() || [];
-            const tbody = document.querySelector("#compoundTable tbody");
-            tbody.innerHTML = '';
-            if (data.length === 0) addRow();
-            else data.forEach(rowData => addRow(rowData, true));
-        });
-    }
-
-    // ======= Автологин =======
     window.addEventListener("DOMContentLoaded", () => {
         const savedUser = JSON.parse(localStorage.getItem("currentUser"));
         if (savedUser) {
@@ -221,7 +230,6 @@ export function startApp(database, dbRef) {
             loginOverlay.style.display = 'none';
             showMainContent(true);
             updatePermissions();
-            loadTable();
         } else {
             showMainContent(false);
         }
