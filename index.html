@@ -11,77 +11,66 @@
 
 <body>
 
-    <!-- Авторизация -->
-    <div id="loginOverlay" class="login-overlay">
-        <div class="login-box">
-            <img class="login__img-logo" src="img/logo.png" alt="Логотип">
-            <h2>Вход в систему</h2>
-            <input type="text" id="username" placeholder="Имя пользователя">
-            <input type="password" id="password" placeholder="Пароль">
-            <button id="loginBtn">Войти</button>
-            <p id="loginError" style="color:red; display:none;">Неверный логин или пароль</p>
-        </div>
+<!-- Авторизация -->
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+        <h2>Вход в систему</h2>
+        <input type="text" id="username" placeholder="Имя пользователя"><br><br>
+        <input type="password" id="password" placeholder="Пароль"><br><br>
+        <button id="loginBtn">Войти</button>
+        <p id="loginError" style="color:red; display:none;">Неверный логин или пароль</p>
     </div>
+</div>
 
-    <!-- Основное содержимое -->
-    <div class="wrapper">
-        <header class="header">
-            <div class="container">
-                <div class="header__inner">
-                    <div class="header__img">
-                        <img class="header__img-logo" src="img/logo.png" alt="Логотип">
-                    </div>
-                    <button id="logoutBtn" class="logout-btn">Выйти</button>
-                </div>
-            </div>
-        </header>
+<!-- Основное содержимое -->
+<div class="header">
+    <button id="logoutBtn" class="logout-btn">Выйти</button>
+</div>
+<main class="main">
+    <table id="compoundTable" class="table">
+        <caption>Temperature limits for MB-LINE</caption>
+        <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Sap номер</th>
+                <th id="sortCompound">Наименование смеси ⬍</th>
+                <th>MIN</th>
+                <th>MAX</th>
+                <th>Tdd Оборудования</th>
+                <th>Tdp(max) Измеренная</th>
+                <th>Комментарии</th>
+                <th>Del</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <button id="addRowBtn" class="add-row-btn">Добавить строку</button>
+    <datalist id="compoundList"></datalist>
+</main>
 
-        <main class="main">
-            <table id="compoundTable" class="table">
-                <caption class="table__title-name">Temperature limits for MB-LINE</caption>
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        <th>Sap номер</th>
-                        <th id="sortCompound">Наименование смеси ⬍</th>
-                        <th>MIN</th>
-                        <th>MAX</th>
-                        <th>Tdd Оборудования</th>
-                        <th>Tdp(max) Измеренная</th>
-                        <th>Комментарии</th>
-                        <th>Del</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-            <button id="addRowBtn" class="add-row-btn">Добавить строку</button>
-            <datalist id="compoundList"></datalist>
-        </main>
-    </div>
+<!-- Firebase + main.js -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getDatabase, ref } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+    import { startApp } from "./main.js"; // main.js лежит в той же папке, что index.html
 
-    <!-- Firebase + main.js -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
-        import { startApp } from "./js/main.js";
+    const firebaseConfig = {
+        apiKey: "AIzaSyCcmCo17HZ4_dGO7KTkslqISe60eoJDO9w",
+        authDomain: "mb-line.firebaseapp.com",
+        databaseURL: "https://mb-line-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "mb-line",
+        storageBucket: "mb-line.firebasestorage.app",
+        messagingSenderId: "431869555143",
+        appId: "1:431869555143:web:aeae28da6eee1d7d0629e2"
+    };
 
-        // Firebase конфиг
-        const firebaseConfig = {
-            apiKey: "AIzaSyC4XgLqm_ou8nOSYVYBICfuW1JfRj3vjRo",
-            authDomain: "temperature-app-75a2c.firebaseapp.com",
-            databaseURL: "https://temperature-app-75a2c-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "temperature-app-75a2c",
-            storageBucket: "temperature-app-75a2c.appspot.com",
-            messagingSenderId: "844360188214",
-            appId: "1:844360188214:web:01c54460e9faedb9a3b397"
-        };
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
 
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
+    startApp(database, ref(database, 'compounds'));
+</script>
 
-        // Запуск приложения
-        startApp(database, ref(database, 'compounds'));
-    </script>
 </body>
+
 
 </html>
