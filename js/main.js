@@ -1,0 +1,244 @@
+// main.js
+// Экспортируем функцию для запуска приложения
+export function startApp(database, dbRef) {
+    window.addEventListener("DOMContentLoaded", () => {
+
+        // ======= Пользователи =======
+        const USERS = [
+            { username: 'admin', password: '33002565', role: 'admin' },
+            { username: 'operator', password: '12345', role: 'user' }
+        ];
+
+        // ======= DOM элементы =======
+        const loginOverlay = document.getElementById('loginOverlay');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginError = document.getElementById('loginError');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        let currentUserRole = null;
+
+        // ======= Справочник компаундов =======
+        const compounds = [
+            { name: 'M1-A00205', min: 140, max: 150 },
+            { name: 'M1-A00268', min: 140, max: 150 },
+            { name: 'M1-A00517', min: 140, max: 150 },
+            { name: 'M1-B00460', min: 140, max: 160 },
+            { name: 'M2-R00037', min: 170, max: 180 }
+        ];
+
+        // Заполнение datalist
+        const dataList = document.getElementById("compoundList");
+        compounds.forEach(c => {
+            const option = document.createElement("option");
+            option.value = c.name;
+            dataList.appendChild(option);
+        });
+
+        // Получаем сегодняшнюю дату
+        function getToday() {
+            return new Date().toLocaleDateString("ru-RU");
+        }
+
+        // Добавление строки в таблицу
+        function addRow(rowData = null) {
+            const tbody = document.querySelector("#compoundTable tbody");
+            const newRow = document.createElement("tr");
+            newRow.innerHTML = `
+                <td class="date-cell">${rowData ? rowData[0] : getToday()}</td>
+                <td contenteditable="true">${rowData ? rowData[1] : ""}</td>
+                <td><input type="text" class="compound-input" list="compoundList" value="${rowData ? rowData[2] : ""}"></td>
+                <td class="min-value">${rowData ? rowData[3] : ""}</td>
+                <td class="max-value">${rowData ? rowData[4] : ""}</td>
+                <td contenteditable="true">${rowData ? rowData[5] : ""}</td>
+                <td contenteditable="true">${rowData ? rowData[6] : ""}</td>
+                <td contenteditable="true">${rowData ? rowData[7] : ""}</td>
+                <td><button class="deleteBtn">✖</button></td>`;
+            tbody.appendChild(newRow);
+            bindRow(newRow);
+            updatePermissions();
+            restoreOutOfRange(newRow);
+            saveTable();
+        }
+
+        // Проверка выхода значения за диапазон
+        function checkRange(cell, min, max) {
+            const val = parseFloat(cell.textContent);
+            if (!isNaN(val) && (val < min || val > max)) {
+                cell.classList.add("out-of-range");
+            } else {
+                cell.classList.remove("out-of-range");
+            }
+        }
+
+        // Восстановление подсветки после загрузки
+        function restoreOutOfRange(row) {
+            const input = row.querySelector(".compound-input");
+            const minCell = row.querySelector(".min-value");
+            const maxCell = row.querySelector(".max-value");
+            const tddCell = row.querySelector("td:nth-child(6)");
+            const tdpCell = row.querySelector("td:nth-child(7)");
+            const compound = compounds.find(c => c.name === input.value);
+            if (compound) {
+                checkRange(tddCell, compound.min, compound.max);
+                checkRange(tdpCell, compound.min, compound.max);
+            }
+        }
+
+        // Привязка событий к строке
+        function bindRow(row) {
+            const input = row.querySelector(".compound-input");
+            const minCell = row.querySelector(".min-value");
+            const maxCell = row.querySelector(".max-value");
+            const tddCell = row.querySelector("td:nth-child(6)");
+            const tdpCell = row.querySelector("td:nth-child(7)");
+            const commentCell = row.querySelector("td:nth-child(8)");
+            const deleteBtn = row.querySelector(".deleteBtn");
+
+            input.addEventListener("input", () => {
+                const compound = compounds.find(c => c.name === input.value);
+                if (compound) {
+                    minCell.textContent = compound.min;
+                    maxCell.textContent = compound.max;
+                } else {
+                    minCell.textContent = "";
+                    maxCell.textContent = "";
+                }
+                checkRange(tddCell, compound?.min, compound?.max);
+                checkRange(tdpCell, compound?.min, compound?.max);
+                saveTable();
+            });
+
+            [tddCell, tdpCell, commentCell].forEach(cell => {
+                cell.addEventListener("input", () => {
+                    const min = parseFloat(minCell.textContent);
+                    const max = parseFloat(maxCell.textContent);
+                    if (!isNaN(min) && !isNaN(max)) {
+                        checkRange(cell, min, max);
+                    }
+                    saveTable();
+                });
+            });
+
+            deleteBtn.addEventListener("click", () => {
+                if (currentUserRole === 'admin') {
+                    row.remove();
+                    saveTable();
+                }
+            });
+        }
+
+        // Сортировка по названию смеси
+        let sortAsc = true;
+        document.getElementById("sortCompound").addEventListener("click", () => {
+            const tbody = document.querySelector("#compoundTable tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            rows.sort((a,b) => {
+                const aVal = a.querySelector(".compound-input").value.toLowerCase();
+                const bVal = b.querySelector(".compound-input").value.toLowerCase();
+                return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            rows.forEach(r => tbody.appendChild(r));
+            sortAsc = !sortAsc;
+        });
+
+        // Кнопка добавления строки
+        document.getElementById("addRowBtn").addEventListener("click", () => addRow());
+
+        // Показ или скрытие основного контента
+        function showMainContent(show) {
+            document.querySelector('.main').style.display = show ? 'block' : 'none';
+            document.querySelector('.header').style.display = show ? 'flex' : 'none';
+        }
+
+        // Авторизация
+        function login(username, password) {
+            const user = USERS.find(u => u.username === username && u.password === password);
+            if (user) {
+                loginOverlay.style.display = 'none';
+                showMainContent(true);
+                currentUserRole = user.role;
+                updatePermissions();
+                localStorage.setItem("currentUser", JSON.stringify(user));
+                loadTable();
+            } else {
+                loginError.style.display = 'block';
+            }
+        }
+
+        loginBtn.addEventListener('click', () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            login(username, password);
+        });
+
+        // Enter для авторизации
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && loginOverlay.style.display !== "none") {
+                loginBtn.click();
+            }
+        });
+
+        // Выход
+        logoutBtn.addEventListener("click", () => {
+            currentUserRole = null;
+            loginOverlay.style.display = 'flex';
+            showMainContent(false);
+            localStorage.removeItem("currentUser");
+        });
+
+        // Обновление прав доступа
+        function updatePermissions() {
+            document.querySelectorAll('.deleteBtn').forEach(btn => {
+                btn.style.display = currentUserRole === 'admin' ? 'inline-block' : 'none';
+            });
+            document.getElementById('addRowBtn').style.display = 'inline-block';
+        }
+
+        // ====== Работа с Firebase ======
+
+        // Сохраняем таблицу
+        function saveTable() {
+            const rows = [];
+            document.querySelectorAll("#compoundTable tbody tr").forEach(row => {
+                const cells = row.querySelectorAll("td");
+                rows.push([
+                    cells[0].textContent,
+                    cells[1].textContent,
+                    row.querySelector(".compound-input").value,
+                    row.querySelector(".min-value").textContent,
+                    row.querySelector(".max-value").textContent,
+                    cells[5].textContent,
+                    cells[6].textContent,
+                    cells[7].textContent
+                ]);
+            });
+            set(dbRef, rows);
+        }
+
+        // Загружаем таблицу
+        function loadTable() {
+            onValue(dbRef, snapshot => {
+                const data = snapshot.val() || [];
+                const tbody = document.querySelector("#compoundTable tbody");
+                tbody.innerHTML = '';
+                if (data.length === 0) {
+                    addRow();
+                } else {
+                    data.forEach(rowData => addRow(rowData));
+                }
+            });
+        }
+
+        // Автозагрузка при старте
+        const savedUser = JSON.parse(localStorage.getItem("currentUser"));
+        if (savedUser) {
+            currentUserRole = savedUser.role;
+            loginOverlay.style.display = 'none';
+            showMainContent(true);
+            updatePermissions();
+            loadTable();
+        } else {
+            showMainContent(false);
+        }
+    });
+}
