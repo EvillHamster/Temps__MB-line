@@ -72,7 +72,7 @@ export function startApp(database, dbRef) {
     }
 
     // ======= Таблица =======
-    function addRow(rowData = null) {
+    function addRow(rowData = null, initialLoad = false) {
         const tbody = document.querySelector("#compoundTable tbody");
         const newRow = document.createElement("tr");
         newRow.innerHTML = `
@@ -86,13 +86,13 @@ export function startApp(database, dbRef) {
             <td contenteditable="true">${rowData ? rowData[7] : ""}</td>
             <td><button class="deleteBtn">✖</button></td>`;
         tbody.appendChild(newRow);
-        bindRow(newRow);
+        bindRow(newRow, initialLoad);
         updatePermissions();
         restoreOutOfRange(newRow);
-        saveTable();
+        if (!initialLoad) saveTable(); // сохраняем только если не инициализация
     }
 
-    function bindRow(row) {
+    function bindRow(row, initialLoad = false) {
         const input = row.querySelector(".compound-input");
         const minCell = row.querySelector(".min-value");
         const maxCell = row.querySelector(".max-value");
@@ -112,7 +112,7 @@ export function startApp(database, dbRef) {
             }
             checkRange(tddCell, compound?.min, compound?.max);
             checkRange(tdpCell, compound?.min, compound?.max);
-            saveTable();
+            if (!initialLoad) saveTable();
         });
 
         [tddCell, tdpCell, commentCell].forEach(cell => {
@@ -122,7 +122,7 @@ export function startApp(database, dbRef) {
                 if (!isNaN(min) && !isNaN(max)) {
                     checkRange(cell, min, max);
                 }
-                saveTable();
+                if (!initialLoad) saveTable();
             });
         });
 
@@ -184,7 +184,7 @@ export function startApp(database, dbRef) {
         localStorage.removeItem("currentUser");
     });
 
-    // ======= Работа с Firebase =======
+    // ======= Firebase =======
     function saveTable() {
         const rows = [];
         document.querySelectorAll("#compoundTable tbody tr").forEach(row => {
@@ -209,7 +209,7 @@ export function startApp(database, dbRef) {
             const tbody = document.querySelector("#compoundTable tbody");
             tbody.innerHTML = '';
             if (data.length === 0) addRow();
-            else data.forEach(rowData => addRow(rowData));
+            else data.forEach(rowData => addRow(rowData, true));
         });
     }
 
